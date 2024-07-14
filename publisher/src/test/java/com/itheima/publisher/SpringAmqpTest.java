@@ -28,7 +28,7 @@ class SpringAmqpTest {
         //1.队列名
         String queuename = "work.queue";
 
-        for (int i = 0; i < 50; i++) {
+        for (int i = 1; i < 50; i++) {
             //2.消息内容
             String message = "Hello，我是第" + i + "条消息";
             //3.发送消息
