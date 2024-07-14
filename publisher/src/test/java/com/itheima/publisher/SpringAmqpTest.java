@@ -23,6 +23,7 @@ class SpringAmqpTest {
         rabbitTemplate.convertAndSend(queuename, message);
 
     }
+
     @Test
     public void testWorkQueue() {
         //1.队列名
@@ -37,4 +38,45 @@ class SpringAmqpTest {
 
 
     }
+
+    @Test
+    public void testFanoutQueue() {
+        //1.队列名
+        String exchangename = "hmall.fanout";
+        //2.消息内容
+        String message = "hello,everyone";
+        //3.发送消息
+        rabbitTemplate.convertAndSend(exchangename, null,message);
+    }
+    @Test
+    public void testDirectQueue() {
+        //1.队列名
+        String exchangename = "hmall.direct";
+        //2.消息内容
+        String message = "hello,红色";
+        //3.发送消息
+        rabbitTemplate.convertAndSend(exchangename, "red",message);
+    }
+
+    @Test
+    public void testDirectQueue1() {
+        //1.队列名
+        String exchangename = "hmall.direct";
+        //2.消息内容
+        String message = "hello,蓝色";
+        //3.发送消息
+        rabbitTemplate.convertAndSend(exchangename, "blue",message);
+    }
+
+    @Test
+    public void testDirectQueue2() {
+        //1.队列名
+        String exchangename = "hmall.direct";
+        //2.消息内容
+        String message = "hello,红色";
+        //3.发送消息
+        rabbitTemplate.convertAndSend(exchangename, "yellow",message);
+    }
+
+
 }
