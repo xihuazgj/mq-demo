@@ -13,6 +13,8 @@ Rabbimq可以实现异步调用，有一定的**优势**
 * 1.项目业务之间的消息，完全依赖于RabbitMQ，RabbitMQ出现异常的话，业务就会出现异常
 * 2.RabbitMQ整体架构复杂，维护和调试成本高
 
+利用SpringAMQP api进行RabbitMQ的操作
+
 RabbitMQ中简单的发消息
 
     @Autowired
@@ -79,7 +81,7 @@ RabbitMQ中的（部署多个，形成集群）workqueue可处理秒杀类业务
 
         @Test
         public void testFanoutQueue() {
-        //1.队列名
+        //1.交换机名
         String exchangename = "hmall.fanout";
         //2.消息内容
         String message = "hello,everyone";
@@ -99,7 +101,7 @@ Direct Exchange会将接收到的消息根据规则路由到指定的Queue,因�
 
       @Test
       public void testDirectQueue1() {
-      //1.队列名
+      //1.交换机名
       String exchangename = "hmall.direct";
       //2.消息内容
       String message = "hello,蓝色";
@@ -109,7 +111,7 @@ Direct Exchange会将接收到的消息根据规则路由到指定的Queue,因�
     
       @Test
       public void testDirectQueue2() {
-      //1.队列名
+      //1.交换机名
       String exchangename = "hmall.direct";
       //2.消息内容
       String message = "hello,红色";
@@ -122,3 +124,65 @@ Direct Exchange会将接收到的消息根据规则路由到指定的Queue,因�
 * Fanout交换机将消息路由给每一个与之绑定的队列
 * Direct交换机根据RoutingKey判断路由给哪个队列
 * 如果多个队列具有相同RoutingKey,则与Fanout功能类似
+
+
+**Topic交换机**
+
+TopicExchange也是基于RoutingKey做消息路由，但是routingKey通常是多个单词的组合，并且以.分割。
+Queue与Exchange指定BindingKeyl时可以使用通配符：
+* ◆#：代指0个或多个单词
+* ◆*：代指一个单词
+
+
+      @Test
+      public void testTopicQueue1() {
+          //1.交换机名
+          String exchangename = "hmall.topic";
+          //2.消息内容
+          String message = "天气：今天天气不错";
+          //3.发送消息
+          rabbitTemplate.convertAndSend(exchangename, "china.weather",message);
+      }
+
+**Topic交换机相比Direct:交换机的差异？**
+
+Topic的RoutingKey和bindingKey可以是多个单词，以.分割
+Topic交换机与队列绑定时的bindingKey可以指定通配符
+#:代表0个或多个词
+*:代表1个词
+
+
+**基于代码声明队列和交换机**
+
+* SpringAMQP:提供了几个类，用来声明队列、交换机及其绑定关系：
+* Queue:用于声明队列，可以用工厂类QueueBuilder构建
+* Exchange:用于声明交换机，可以用工厂类ExchangeBuilder构建
+* Binding:用于声明队列和交换机的绑定关系，可以用工厂类BindingBuilder构建
+* 通常在消费者端（消息接收者）写出**声明队列和交换机的配置类**，生产者端（消息发送者）只关心把消息发到交换机里就行了
+
+
+    @Configuration
+    public class FanoutConfiguration {
+    
+        //声明交换机
+        @Bean
+        public FanoutExchange fanoutExchange(){
+            return new FanoutExchange("hamll.fanout");
+    //        return ExchangeBuilder.fanoutExchange("hmall.fanout").build();
+    }
+    
+        //声明队列
+        @Bean
+        public Queue fanoutQueue1(){
+            return new Queue("fanout.queue1"); //durable默认为true，即持久化
+    
+    //        return QueueBuilder.durable("fanout.queue1").build(); //durable是把这个队列持久化，存储到磁盘里。不易丢失
+    }
+    
+        //绑定交换机与队列
+        @Bean
+        public Binding fanoutQueue1Binding(Queue fanoutQueue1,FanoutExchange fanoutExchange){
+    
+            return BindingBuilder.bind(fanoutQueue1).to(fanoutExchange);
+        }
+    }

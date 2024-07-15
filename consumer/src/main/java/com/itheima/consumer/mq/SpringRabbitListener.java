@@ -29,13 +29,13 @@ public class SpringRabbitListener {
 //        log.info("监听到work.queue的消息：【{}】",msg);
     }
     @RabbitListener(queues = "fanout.queue1")
-    public void listenFanoutQueue1(String msg) throws InterruptedException {
+    public void listenFanoutQueue1(String msg) {
         System.out.println("消费者1监听到 fanout.queue1 的消息：" + msg);
 
     }
 
     @RabbitListener(queues = "fanout.queue2")
-    public void listenFanoutQueue2(String msg) throws InterruptedException {
+    public void listenFanoutQueue2(String msg) {
         System.out.println("消费者2监听到 fanout.queue1 的消息：" + msg);
 
     }
@@ -47,6 +47,16 @@ public class SpringRabbitListener {
     @RabbitListener(queues = "direct.queue2")
     public void listenDirectQueue2(String msg) throws InterruptedException {
         System.out.println("消费者2监听到 direct.queue1 的消息：" + msg);
+
+    }
+    @RabbitListener(queues = "topic.queue1")
+    public void listenTopicQueue1(String msg) throws InterruptedException {
+        System.out.println("消费者1监听到 topic.queue1 的消息：" + msg);
+
+    }
+    @RabbitListener(queues = "topic.queue2")
+    public void listenTopicQueue2(String msg) throws InterruptedException {
+        System.out.println("消费者2监听到 topic.queue2 的消息：" + msg);
 
     }
 
