@@ -13,8 +13,6 @@ Rabbimq可以实现异步调用，有一定的**优势**
 * 1.项目业务之间的消息，完全依赖于RabbitMQ，RabbitMQ出现异常的话，业务就会出现异常
 * 2.RabbitMQ整体架构复杂，维护和调试成本高
 
-利用SpringAMQP api进行RabbitMQ的操作
-
 RabbitMQ中简单的发消息
 
     @Autowired
@@ -151,7 +149,7 @@ Topic交换机与队列绑定时的bindingKey可以指定通配符
 #:代表0个或多个词
 *:代表1个词
 
-
+利用SpringAMQP api进行RabbitMQ的操作
 **基于代码声明队列和交换机**
 
 * SpringAMQP:提供了几个类，用来声明队列、交换机及其绑定关系：
@@ -185,4 +183,16 @@ Topic交换机与队列绑定时的bindingKey可以指定通配符
     
             return BindingBuilder.bind(fanoutQueue1).to(fanoutExchange);
         }
+    }
+
+基于@RabbitListener注解来声明交换机与队列
+
+    @RabbitListener(bindings = @QueueBinding(
+            value = @Queue(name = "direct.queue1",durable = "true"),
+            exchange = @Exchange(name = "hmall.direct",type = ExchangeTypes.DIRECT),
+            key = {"red","blue"}
+    ))
+    public void listenDirectQueue1(String msg) throws InterruptedException {
+        System.out.println("消费者1监听到 direct.queue1 的消息：" + msg);
+
     }
