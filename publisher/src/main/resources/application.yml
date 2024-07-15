@@ -1,3 +1,8 @@
+logging:
+  pattern:
+    dateformat: MM-dd HH:mm:ss:SSS
+  level:
+    com.itheima: debug
 spring:
   rabbitmq:
     host: 192.168.32.131 # 你的虚拟机IP
@@ -5,6 +10,9 @@ spring:
     virtual-host: /hmall # 虚拟主机
     username: hmall # 用户名
     password: hmall # 密码
-logging:
-  pattern:
-    dateformat: MM-dd HH:mm:ss:SSS
+    connection-timeout: 1s
+    template:
+      retry:
+        enabled: true
+    publisher-confirm-type: correlated
+    publisher-returns: true

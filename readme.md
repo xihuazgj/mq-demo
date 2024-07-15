@@ -1,5 +1,5 @@
 # RabbitMQ
-
+## 基础篇
 前言：之前学习的feign是基于同步调用的，它的劣势在于虽然使用了微服务，解除了项目业务之间的耦合性，但是微服务与微服务之间也存在一定的耦合。比如支付业务，在进行支付业务的过程中，我们需要获取用户的支付状态，之后再调用用户接口来扣减用户的余额，这是属于支付业务模块的，
 但是，后面又要去修改订单的支付状态，达到更新用户购物车的作用，这时的业务就和支付业务模块关系不大了，而且这种同步调用，会造成等待的时间变长。所以对于这种业务，可以采用异步的模式进行处理。
 
@@ -196,3 +196,144 @@ Topic交换机与队列绑定时的bindingKey可以指定通配符
         System.out.println("消费者1监听到 direct.queue1 的消息：" + msg);
 
     }
+
+## 高级篇
+
+前言：由于在使用mq传递消息的过程中，可能会出现我们意料不到的情况，比如网络中断，服务宕机；因此我们就必须采用一些更可靠的策略来保证数据的可靠性
+
+**策略1：发送者重连**
+注意：当网络不稳定的时候，利用重试机制可以有效提高消息发送的成功率。不过SpringAMOP提供的重试机制是
+**阻塞式**的重试，也就是说多次重试等待的过程中，当前线程是被阻塞的，会影响业务性能
+如果对于业务性能有要求，建议**禁用**重试机制。如果一定要使用，请合理配置等待时长和重试次数，当然也
+可以考虑使用**异步**线程来执行发送消息的代码。
+
+
+在消息发送者配置文件yml文件中配置
+
+        spring:
+        rabbitmq:
+        connection-timeout: 1s # 设置MQ的连接超时时间
+        template:
+        retry:
+        enabled: true # 开启超时重试机制
+        initial-interval: 1000ms # 失败后的初始等待时间
+        multiplier: 1 # 失败后下次的等待时长倍数，下次等待时长 = initial-interval * multiplier
+        max-attempts: 3 # 最大重试次数
+
+
+**策略2：发送者确认**
+
+SpringAMQP提供了Publisher Confirm和Publisher Return两种确认机制。开启确机制认后，当发送者发送消息给
+MQ后，MQ会返回确认结果给发送者。返回的结果有以下几种情况：
+
+* 消息投递到了MQ,但是路由失败。此时会通过PublisherReturn:返回路由异常原因，然后返回ACK,告知投递成功
+* 临时消息投递到了MQ,并且入队成功，返回ACK,告知投递成功
+* 持久消息投递到了MQ,并且入队完成持久化，返回ACK,告知投递成功
+* 其它情况都会返回NACK,告知投递失败
+
+
+     spring:
+     rabbitmq:
+     host: 192.168.32.131 # 你的虚拟机IP
+     port: 5672 # 端口
+     virtual-host: /hmall # 虚拟主机
+     username: hmall # 用户名
+     password: hmall # 密码
+     connection-timeout: 1s
+     template:
+     retry:
+     enabled: true
+     publisher-confirm-type: correlated
+     publisher-returns: false
+
+配置说明：
+* 这里publisher-confirm-type有三种模式可选：
+* none:关闭confirm机制
+* simple:同步阻塞等待MQ的回执消息
+* correlated:MQ异步回调方式返回回执消息
+
+消息发送过程中，可能会出现两种情况：
+
+1.消息发送成功：
+
+        @Test
+        public void testConfirmCallback() throws InterruptedException {
+        //创建correlationData
+        CorrelationData cd = new CorrelationData(UUID.randomUUID().toString());
+        cd.getFuture().addCallback(new ListenableFutureCallback<CorrelationData.Confirm>() {
+        @Override
+        public void onFailure(Throwable ex) {
+        log.error("spring amqp 处理结果异常", ex);
+        }
+
+            @Override
+            public void onSuccess(CorrelationData.Confirm result) {
+                //判断是否成功
+                if (result.isAck()) {
+                    log.debug("收到ConfirmCallback ack，消息发送成功！");
+                } else {
+                    log.error("收到ConfirmCallback nack，消息发送失败！reason: {}", result.getReason());
+                }
+            }
+        });
+
+        //1.交换机名
+        String exchangename = "hmall.direct";
+        //2.消息内容
+        String message = "hello,红色";
+        //3.发送消息
+        rabbitTemplate.convertAndSend(exchangename, "red", message, cd);
+
+        // 等待回调完成
+        Thread.sleep(2000);
+    }
+
+日志直接记录：收到ConfirmCallback ack，消息发送成功！
+
+2.消息发送失败，比如我们这里交换机名字填写错误
+日志直接记录：收到ConfirmCallback nack，消息发送失败！
+
+        reason: channel error; protocol method: 
+        #method<channel.close>(reply-code=404, 
+        reply-text=NOT_FOUND - 
+        no exchange 'hmall.direct1' in vhost '/hmall', 
+        class-id=60, method-id=40)
+
+通过日志，我们就能快速定位到错误：no exchange 'hmall.direct1' in vhost '/hmall',
+
+3.2.消息发送成功，但路由失败，比如routingkey填写错误
+
+这时我们就要编写一个配置类，用来记录
+
+    @Configuration
+    @Slf4j
+    @RequiredArgsConstructor
+    public class MqConfig {
+
+    private final RabbitTemplate rabbitTemplate;
+
+    @PostConstruct
+    public void init(){
+
+        rabbitTemplate.setReturnsCallback(returned -> {
+            log.error("监听到消息 return callback");
+            log.debug("交换机：{}",returned.getExchange());
+            log.debug("routingKey：{}",returned.getRoutingKey());
+            log.debug("message：{}",returned.getMessage());
+            log.debug("replyCode：{}",returned.getReplyCode());
+            log.debug("replyText：{}",returned.getReplyText());
+        });
+    }
+    }
+
+这时，日志记录：
+
+        监听到消息 return callback
+        收到ConfirmCallback ack，消息发送成功！
+        :交换机：hmall.direct
+        DEBUG 31544 message：(Body:'"hello,红色"'
+        MessageProperties [headers={spring_returned_message_correlation=744b7a0f-3cf4-4aae-81cc-72ac9fa4507d, __TypeId__=java.lang.String}, contentType=application/json, contentEncoding=UTF-8, contentLength=0, receivedDeliveryMode=PERSISTENT, priority=0, deliveryTag=0])
+        replyCode：312
+        replyText：NO_ROUTE
+
+NO_ROUTE，我们就能定位到错误了
